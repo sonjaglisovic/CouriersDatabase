@@ -27,27 +27,31 @@ public class gs170250_CourierDAO implements CourierOperations {
     @Override
     public boolean insertCourier(String courierUserName, String licencePlateNumber) {
         
-        Integer acceptCode = 1;
-        Connection connection = DB.getInstance().getConnection();
-        String sql = "{call spProcessCourierRequest (?, ?, ?, ?)}";
-        try (PreparedStatement getUserName = connection.prepareStatement("select idUser from [User] where UserName = ?")) {
-            CallableStatement acceptCourier = connection.prepareCall(sql);
+         Connection connection = DB.getInstance().getConnection();
+         try (PreparedStatement getUserId = connection.prepareStatement("select idUser from [User] where UserName = ? ");
+                 PreparedStatement checkUser = connection.prepareStatement("select * from Courier where idUser = ? ");
+                 PreparedStatement insertCourierStatement = connection.prepareStatement("insert into Courier (idUser, RegNumber) "
+                    + "values(?, ?)") ) {
+             
+            getUserId.setString(1, courierUserName);
+            ResultSet userIdResult = getUserId.executeQuery();
             
-            getUserName.setString(1, courierUserName);
-            ResultSet userByUserName = getUserName.executeQuery();
-            if(userByUserName.next()){
-            
-                acceptCourier.setInt(1, userByUserName.getInt(1));
-                acceptCourier.setString(2, licencePlateNumber);
-                acceptCourier.setInt(3, acceptCode);
-                acceptCourier.registerOutParameter(4, Types.INTEGER);
-                acceptCourier.execute();
-                return acceptCourier.getInt(4) == 0 ? false : true;
+            if(!userIdResult.next()) {
+                return false;
             }
+            int userId = userIdResult.getInt(1);
+            checkUser.setInt(1, userId);
+            if(checkUser.executeQuery().next()) {
+                return false;
+            }
+            
+            insertCourierStatement.setInt(1, userId);
+            insertCourierStatement.setString(2, licencePlateNumber);
+            
+            return insertCourierStatement.executeUpdate() > 0 ? true : false;
         } catch (SQLException ex) {
-            Logger.getLogger(gs170250_CourierDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_CourierRequestDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
-     
         return false;
     }
 
@@ -61,7 +65,7 @@ public class gs170250_CourierDAO implements CourierOperations {
             deleteCourierStatement.setString(1, courierUserName);
             return deleteCourierStatement.executeUpdate() > 0 ? true : false;
         } catch (SQLException ex) {
-            Logger.getLogger(gs170250_DistrictDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_CourierDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false; 
     }

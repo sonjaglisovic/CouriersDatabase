@@ -158,9 +158,9 @@ public class gs170250_DistrictDAO implements DistrictOperations {
     public List<Integer> getAllDistricts() {
         
         List<Integer> allDistricts = new ArrayList<>();
-        try (Connection connection = DB.getInstance().getConnection()){
-            PreparedStatement getAllDistrictsStatement = connection.prepareStatement("select IdDistrict from District");
-            ResultSet allDistrictsResult = getAllDistrictsStatement.executeQuery();
+        Connection connection = DB.getInstance().getConnection();
+        try (PreparedStatement getAllDistrictsStatement = connection.prepareStatement("select IdDistrict from District");
+            ResultSet allDistrictsResult = getAllDistrictsStatement.executeQuery()) {
             
             while(allDistrictsResult.next()) {
                 allDistricts.add(allDistrictsResult.getInt("IdDistrict"));

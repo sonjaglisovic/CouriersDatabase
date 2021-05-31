@@ -14,8 +14,8 @@ public class StudentMain {
         DistrictOperations districtOperations = new gs170250_DistrictDAO();
         
         CourierOperations courierOperations = new gs170250_CourierDAO(); // e.g. = new MyDistrictOperations();
-        courierOperations.insertCourier("mirko123", "CA024XT");
-        if(!courierOperations.deleteCourier("mirko123")) {
+        courierOperations.insertCourier("mirko122", "CA024XT");
+        if(!courierOperations.deleteCourier("mirko12")) {
             System.out.println("ne brise");
         }
         courierOperations.getAllCouriers().forEach(System.out::println);
@@ -53,7 +53,19 @@ public class StudentMain {
         
         PackageOperations packageOperations = new gs1702500_PackageDAO();
 
-        TestHandler.createInstance(
+        courierRequestOperation.insertCourierRequest("mirko123", "CA024XT");
+        courierRequestOperation.insertCourierRequest("maja123", "CA024XT");
+        courierRequestOperation.insertCourierRequest("boca123", "KG050BS");
+        courierRequestOperation.insertCourierRequest("boca123", "KG050BT");
+        courierRequestOperation.insertCourierRequest("boca123", "KG050BT");
+        
+        courierRequestOperation.getAllCourierRequests().stream().forEach(System.out::println);
+        courierRequestOperation.changeVehicleInCourierRequest("boca123", "CA024XT");
+        courierRequestOperation.insertCourierRequest("ivan123", "KG050BT");
+        courierRequestOperation.grantRequest("ivan123");
+        //courierRequestOperation.deleteCourierRequest("ivan123");
+        
+        /*TestHandler.createInstance(
                 cityOperations,
                 courierOperations,
                 courierRequestOperation,
@@ -63,6 +75,6 @@ public class StudentMain {
                 vehicleOperations,
                 packageOperations);
 
-        TestRunner.runTests();
+        TestRunner.runTests();*/
     }
 }

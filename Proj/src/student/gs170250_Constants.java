@@ -20,4 +20,7 @@ public class gs170250_Constants {
     public static final int CODE_SUCCESS = 0;
     public static final Map<Integer, String> codeToStatus = Map.of(0, "ne vozi", 1, "vozi");
     public static final Map<Integer, String> codeToFuelType = Map.of(0, "plin", 1, "dizel", 2, "benzin");
+    public static final Map<Integer, String> codeToPackageType = Map.of(0, "pismo", 1, "standardno", 2, "lomljivo");
+    public static final Map<Integer, String> codeToPackageStatus = Map.of(0, "kreiran", 1, "zahtev prihvacen", 
+    2, "pokupljen", 3, "isporucen");
 }
