@@ -5,7 +5,9 @@
  */
 package student;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,4 +25,7 @@ public class gs170250_Constants {
     public static final Map<Integer, String> codeToPackageType = Map.of(0, "pismo", 1, "standardno", 2, "lomljivo");
     public static final Map<Integer, String> codeToPackageStatus = Map.of(0, "kreiran", 1, "zahtev prihvacen", 
     2, "pokupljen", 3, "isporucen");
+    public static final List<Integer> price = Arrays.asList(10, 25, 75);
+    public static final List<Integer> factor = Arrays.asList(0, 1, 2);
+    public static final List<Integer> priceByKg = Arrays.asList(null, 100, 300);
 }
