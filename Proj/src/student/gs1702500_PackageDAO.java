@@ -15,6 +15,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,36 @@ import rs.etf.sab.operations.PackageOperations;
  *
  * @author User
  */
+
+
+
 public class gs1702500_PackageDAO implements PackageOperations {
 
+    Map<Integer, Integer> courierCurrentPlace = new HashMap<>();
+    Map<Integer, Double> courierCurrentProfit = new HashMap<>();
+    
+    private class gs170250d_Pair implements PackageOperations.Pair<Integer, BigDecimal> {
+
+        Integer offerId;
+        BigDecimal percentage;
+
+        public gs170250d_Pair(Integer offerId, BigDecimal percentage) {
+            this.offerId = offerId;
+            this.percentage = percentage;
+        }
+        
+        @Override
+        public Integer getFirstParam() {
+            return offerId;
+        }
+
+        @Override
+        public BigDecimal getSecondParam() {
+            return percentage;
+        }
+    
+    }
+    
     @Override
     public int insertPackage(int districtFrom, int districtTo, String userName, int packageType, BigDecimal weight) {
           
@@ -36,33 +65,30 @@ public class gs1702500_PackageDAO implements PackageOperations {
         }
          
          Connection connection = DB.getInstance().getConnection();
-         try (PreparedStatement checkDistrict = connection.prepareStatement("select * from District where IdDistrict = ?");
-                 PreparedStatement checkUser = connection.prepareStatement("select idUser from [User] where UserName = ?");
-                 PreparedStatement insertPackage = connection.prepareStatement("insert into Package (Type, idUser, Weight, DistrictFrom, DistrictTo) "
-                    + "values(?, ?, ?, ?, ?)", PreparedStatement.RETURN_GENERATED_KEYS);
+         try (PreparedStatement checkUser = connection.prepareStatement("select idUser from [User] where UserName = ?");
+                 PreparedStatement insertPackage = connection.prepareStatement("insert into Package (Type, idUser, Weight, DistrictFrom, DistrictTo, Price) "
+                    + "values(?, ?, ?, ?, ?, ?)", PreparedStatement.RETURN_GENERATED_KEYS);
                  ) {
-             
-            checkDistrict.setInt(1, districtFrom);
-            if(!checkDistrict.executeQuery().next()) {
-                return gs170250_Constants.DATABASE_ERROR_CODE;
-            }
-            checkDistrict.setInt(1, districtTo);
-            if(!checkDistrict.executeQuery().next()) {
-                return gs170250_Constants.DATABASE_ERROR_CODE;
-            }
+            
             checkUser.setString(1, userName);
             ResultSet userId = checkUser.executeQuery();
             if(!userId.next()) {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             }
             
-            insertPackage.setString(1, gs170250_Constants.codeToPackageStatus.get(packageType));
+            insertPackage.setString(1, gs170250_Constants.codeToPackageType.get(packageType));
             insertPackage.setInt(2, userId.getInt(1));
             insertPackage.setBigDecimal(3, weight);
             insertPackage.setInt(4, districtFrom);
             insertPackage.setInt(5, districtTo);
+            insertPackage.setBigDecimal(6, gs170250_Util.calculatePrice(districtFrom, districtTo, packageType, weight));
             
-            return insertPackage.executeUpdate() > 0 ? insertPackage.getGeneratedKeys().getInt(1) : gs170250_Constants.DATABASE_ERROR_CODE;
+            insertPackage.executeUpdate();
+            ResultSet insertedKeys = insertPackage.getGeneratedKeys();
+            if(insertedKeys.next()) {
+                return insertedKeys.getInt(1);
+            }
+            
         } catch (SQLException ex) {
             Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -74,10 +100,12 @@ public class gs1702500_PackageDAO implements PackageOperations {
         
          Connection connection = DB.getInstance().getConnection();
          try (PreparedStatement checkCourier = connection.prepareStatement("select idUser from Courier where idUser = (select "
-                 + "idUser from [User] where UserName = ? and Status = 'ne vozi')");
+                 + "idUser from [User] where UserName = ?) and Status = 'ne vozi'");
                  PreparedStatement checkPackage = connection.prepareStatement("select * from Package where idPackage = ?");
-                 PreparedStatement insertTransportOffer = connection.prepareStatement("insert into TransportOffer (Courier, idPackage, OfferDetails) "
-                    + "values(?, ?, ?)", PreparedStatement.RETURN_GENERATED_KEYS) ) {
+                 PreparedStatement insertTransportOffer = connection.prepareStatement("insert into TransportOffer (idUser, idPackage, OfferDetails) "
+                    + "values(?, ?, ?)", PreparedStatement.RETURN_GENERATED_KEYS);
+                 PreparedStatement checkOffer = connection.prepareStatement("select * from TransportOffer  where idUser = ? ");
+                 ) {
              
             checkCourier.setString(1, userName);
             ResultSet courierId = checkCourier.executeQuery();
@@ -85,7 +113,12 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             } 
             checkPackage.setInt(1, packageId);
-            if(checkPackage.executeQuery().next()) {
+            if(!checkPackage.executeQuery().next()) {
+                return gs170250_Constants.DATABASE_ERROR_CODE;
+            }
+          
+            checkOffer.setInt(1, courierId.getInt(1));
+            if(checkOffer.executeQuery().next()) {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             }
             
@@ -93,7 +126,11 @@ public class gs1702500_PackageDAO implements PackageOperations {
             insertTransportOffer.setInt(2, packageId);
             insertTransportOffer.setBigDecimal(3, pricePercentage);
             
-            return insertTransportOffer.executeUpdate() > 0 ? insertTransportOffer.getGeneratedKeys().getInt(1) : gs170250_Constants.DATABASE_ERROR_CODE;
+            insertTransportOffer.executeUpdate();
+            ResultSet insertedKeys = insertTransportOffer.getGeneratedKeys();
+            if(insertedKeys.next()) {
+                return insertedKeys.getInt(1);
+            }
         } catch (SQLException ex) {
             Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -104,10 +141,10 @@ public class gs1702500_PackageDAO implements PackageOperations {
     public boolean acceptAnOffer(int offerId) {
         
          Connection connection = DB.getInstance().getConnection();
-         try (PreparedStatement checkDistrict = connection.prepareStatement("select xCoorfinate, yCoordinate from District where IdDistrict = ?");
-                 PreparedStatement checkOffer = connection.prepareStatement("select idPackage, Courier, OfferDetails from TransportOffer where idOffer = ?");
-                 PreparedStatement getPackage = connection.prepareStatement("select Weight, DistrictFrom, DistrictTo, Status  from Package where idPackage = ?");
-                 ) {
+         try (PreparedStatement checkOffer = connection.prepareStatement("select idPackage, idUser, OfferDetails from TransportOffer where idOffer = ?");
+                 PreparedStatement getPackage = connection.prepareStatement("select Status  from Package where idPackage = ?");
+                 PreparedStatement updatePackage = connection.prepareStatement("update Package set Accepted = ?, Status = ?, Courier = ?, CouriersIncome = ? "
+                         + "where idPackage = ?")) {
              
             checkOffer.setInt(1, offerId);
             ResultSet offer = checkOffer.executeQuery();
@@ -123,37 +160,17 @@ public class gs1702500_PackageDAO implements PackageOperations {
             if(!packageToAccept.next()) {
                 return false;
             }
-            BigDecimal weight = packageToAccept.getBigDecimal(1);
-            int distrcitFrom = packageToAccept.getInt(2);
-            int districtTo = packageToAccept.getInt(3);
             
-            checkDistrict.setInt(1, distrcitFrom);
-            ResultSet distrcitFromCoordinates = checkDistrict.executeQuery();
-            if(!distrcitFromCoordinates.next()) {
-                return false;
-            }
-            double districtFromX = distrcitFromCoordinates.getDouble(1);
-            double districtFromY = distrcitFromCoordinates.getDouble(2);
-            
-            checkDistrict.setInt(1, districtTo);
-            ResultSet distrcitToCoordinates = checkDistrict.executeQuery();
-            if(!distrcitToCoordinates.next()) {
-                return false;
-            }
-            double districtToX = distrcitToCoordinates.getDouble(1);
-            double districtToY = distrcitToCoordinates.getDouble(2);
-            
-            if(packageToAccept.getString("Status") != gs170250_Constants.codeToStatus.get(0)) {
+            if(!packageToAccept.getString(1).equals(gs170250_Constants.codeToPackageStatus.get(0))) {
                 return false;
             } 
-            packageToAccept.updateTimestamp("Accepted", Timestamp.valueOf(LocalDateTime.now()));
-            packageToAccept.updateString("Status", gs170250_Constants.codeToPackageStatus.get(1));
-            packageToAccept.updateInt("Courier", courierId);
-            packageToAccept.updateDouble("Price", gs170250_Util.calculatePrice(districtFromX, districtFromY,
-                    districtToX, districtToY, packageId, weight) * percentage.doubleValue() / 100);
-            
-            packageToAccept.updateRow();
-            return true;
+            updatePackage.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+            updatePackage.setString(2, gs170250_Constants.codeToPackageStatus.get(1));
+            updatePackage.setInt(3, courierId);
+            updatePackage.setBigDecimal(4, percentage);
+            updatePackage.setInt(5, packageId);
+           
+            return updatePackage.executeUpdate() > 0 ? true : false;
         } catch (SQLException ex) {
             Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -180,10 +197,26 @@ public class gs1702500_PackageDAO implements PackageOperations {
     }
 
     @Override
-    public List<Pair<Integer, BigDecimal>> getAllOffersForPackage(int i) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public List<Pair<Integer, BigDecimal>> getAllOffersForPackage(int packageId) {
+       List<Pair<Integer, BigDecimal>> offersForPackages = new ArrayList<>();
+       
+       Connection connection = DB.getInstance().getConnection();
+        try (PreparedStatement getTransportOffers = connection.prepareStatement("select OfferDetails, idOffer from TransportOffer where idPackage = ?")){
+           
+            getTransportOffers.setInt(1, packageId);
+            ResultSet offers = getTransportOffers.executeQuery();
+            
+            while(offers.next()) {
+              offersForPackages.add(new gs170250d_Pair(offers.getInt(2), offers.getBigDecimal(1)));
+            } 
+            return offersForPackages;
+        }catch (SQLException ex) {
+            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+       
     }
-
+    
     @Override
     public boolean deletePackage(int packageId) {
         
@@ -208,19 +241,26 @@ public class gs1702500_PackageDAO implements PackageOperations {
     public boolean changeWeight(int packageId, BigDecimal weight) {
         
         Connection connection = DB.getInstance().getConnection();
-        try (PreparedStatement checkStatus = connection.prepareStatement("select Status from Package where idPackage = ?");
-                PreparedStatement updateWeight = connection.prepareStatement("update Package set Weight = ? where "
-                + "idPackage = ? ")){
+        try (PreparedStatement getPackage = connection.prepareStatement("select Status, Price, Type, Weight, DistrictFrom, DistrictTo from Package where idPackage = ?");
+                PreparedStatement updatePackage = connection.prepareStatement("update Package set Weight = ?, Price = ? where "
+                        + "idPackage = ?")){
            
-            checkStatus.setInt(1, packageId);
-            ResultSet packageStatus = checkStatus.executeQuery();
-            if(!packageStatus.next() || !packageStatus.getString(1).equals(gs170250_Constants.codeToPackageStatus.get(0))) {
+            getPackage.setInt(1, packageId);
+            ResultSet packageDetails = getPackage.executeQuery();
+            if(!packageDetails.next() || !packageDetails.getString(1).equals(gs170250_Constants.codeToPackageStatus.get(0))) {
                 return false;
             }
-            updateWeight.setBigDecimal(1, weight);
-            updateWeight.setInt(1, packageId);
+           
+            String packageType = packageDetails.getString(3);
+            Map.Entry<Integer, String> entry = gs170250_Constants.codeToPackageType.entrySet().stream().filter(map -> 
+            packageType.equals(map.getValue())).findFirst().orElse(null);
             
-            return updateWeight.executeUpdate() > 0 ? true : false;
+            updatePackage.setBigDecimal(1, weight);
+            updatePackage.setBigDecimal(2, gs170250_Util.calculatePrice(packageDetails.getInt(5), packageDetails.getInt(6), 
+                  entry.getKey(), weight));
+            updatePackage.setInt(3, packageId);
+                 
+            return updatePackage.executeUpdate() > 0 ? true : false;
         }catch (SQLException ex) {
             Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -230,20 +270,29 @@ public class gs1702500_PackageDAO implements PackageOperations {
     @Override
     public boolean changeType(int packageId, int packageType) {
         
+        if(!gs170250_Constants.codeToPackageType.containsKey(packageType)) {
+            return false;
+        }
+        
         Connection connection = DB.getInstance().getConnection();
-        try (PreparedStatement checkStatus = connection.prepareStatement("select Status from Package where idPackage = ?");
-                PreparedStatement updateType = connection.prepareStatement("update Package set Type = ? where "
-                + "idPackage = ? ")){
+        try (PreparedStatement getPackage = connection.prepareStatement("select Status, Price, "
+                + "Type, Weight, DistrictTo, DistrictFrom from Package where idPackage = ?");
+                PreparedStatement updatePackage = connection.prepareStatement("update Package set Type = ?, Price = ? "
+                        + "where idPackage = ?")){
            
-            checkStatus.setInt(1, packageId);
-            ResultSet packageStatus = checkStatus.executeQuery();
-            if(!packageStatus.next() || !packageStatus.getString(1).equals(gs170250_Constants.codeToPackageStatus.get(0))) {
+            getPackage.setInt(1, packageId);
+            ResultSet packageDetails = getPackage.executeQuery();
+            if(!packageDetails.next() || !packageDetails.getString(1).equals(gs170250_Constants.codeToPackageStatus.get(0))) {
                 return false;
             }
-            updateType.setString(1, gs170250_Constants.codeToPackageType.get(packageType));
-            updateType.setInt(1, packageId);
+            updatePackage.setString(1, gs170250_Constants.codeToPackageType.get(packageType));
+            updatePackage.setBigDecimal(2, gs170250_Util.calculatePrice(packageDetails.getInt(5), packageDetails.getInt(6), 
+                  packageType, packageDetails.getBigDecimal(4)));
+            updatePackage.setInt(3, packageId);
             
-            return updateType.executeUpdate() > 0 ? true : false;
+            
+            return updatePackage.executeUpdate() > 0 ? true : false;
+            
         }catch (SQLException ex) {
             Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -259,9 +308,10 @@ public class gs1702500_PackageDAO implements PackageOperations {
            
             getStatus.setInt(1, packageId);
             ResultSet status = getStatus.executeQuery();
-            
+  
             if(status.next()) {
-              Map.Entry<Integer, String> statusEntry = gs170250_Constants.codeToPackageStatus.entrySet().stream().filter(map -> map.getValue().equals(status)).findFirst().orElse(null);
+              String packageStatus = status.getString(1);
+              Map.Entry<Integer, String> statusEntry = gs170250_Constants.codeToPackageStatus.entrySet().stream().filter(map -> map.getValue().equals(packageStatus)).findFirst().orElse(null);
               return statusEntry.getKey();
             } 
             return deliveryStatus;
@@ -350,13 +400,178 @@ public class gs1702500_PackageDAO implements PackageOperations {
     }
 
     @Override
-    public List<Integer> getDrive(String string) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public List<Integer> getDrive(String courierUserName) {
+       List<Integer> allPackages = new ArrayList<>(); 
+      
+       Connection connection = DB.getInstance().getConnection();
+        try (PreparedStatement courierByUserName = connection.prepareStatement("select idUser from Courier where idUser = (select idUser from [User] where UserName = ?) and Status = 'vozi'");
+                PreparedStatement getDrive = connection.prepareStatement("select idPackage from Package where Courier = ? and Status = ?")){
+           
+            
+            courierByUserName.setString(1, courierUserName);
+            ResultSet courierId = courierByUserName.executeQuery();
+            
+            if(!courierId.next()) {
+                return null;
+            }
+            getDrive.setInt(1, courierId.getInt(1));
+            getDrive.setString(2, gs170250_Constants.codeToPackageStatus.get(2));
+            ResultSet packages = getDrive.executeQuery();
+            while(packages.next()) {
+              allPackages.add(packages.getInt(1));
+            } 
+            return allPackages;
+        }catch (SQLException ex) {
+            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
     }
 
     @Override
-    public int driveNextPackage(String string) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public int driveNextPackage(String userName) {
+        
+        
+        int idPackage;
+        
+        Connection connection = DB.getInstance().getConnection();
+        try(PreparedStatement checkCourier = connection.prepareStatement("select idUser, RegNumber from Courier  where idUser (select idUser from [User]  UserName = ?) ");
+                PreparedStatement nextPackageForCourier = connection.prepareStatement("select TOP 1 idPackage, Price, DistrictFrom, DistrictTo, CouriersIncome, idUser Status from Package where "
+                + "Courier = ? and Status = ? order by Accepted");
+                PreparedStatement updatePackages = connection.prepareStatement("update Package set "
+                        + "Status = ? where Status = ? and Courier = ?");
+                PreparedStatement updatePackage = connection.prepareStatement("update Package set "
+                        + "Status = ? where idPackage = ?");
+                PreparedStatement getVehicle = connection.prepareStatement("select FuelType, FuelConsumption from Vehicle  "
+                        + "where RegNumber = ?");
+                PreparedStatement startDrive = connection.prepareStatement("update Courier set Status = 'vozi' where idUser = ?");
+                PreparedStatement finishDrive = connection.prepareStatement("update Courier set "
+                        + "Status = ?, Profit = Profit + ? where idUser = ?");
+                 PreparedStatement updateUser = connection.prepareStatement("update [User] set "
+                        + "NumOfSentPackages = NumOfSentPackages + 1 where idUser = ?");
+                PreparedStatement updateCourier = connection.prepareStatement("update Courier set "
+                        + "NumOfDeliveredPackages = NumOfDeliveredPackages + 1 where idUser = ?");
+                ) {
+              
+            checkCourier.setString(1, userName);
+            ResultSet courierId = checkCourier.executeQuery();
+            if(!courierId.next()) {
+                return -2;
+            }
+            
+            int courier = courierId.getInt(1);
+            String regNumber = courierId.getString(2);
+            
+            nextPackageForCourier.setInt(1, courier);
+            
+            double distance = 0.0;
+            ResultSet nextPackage = nextPackageForCourier.executeQuery();
+            int districtFrom;
+            int districtTo;
+            double price;
+            double income;
+            int senderId;
+            
+            if(!courierCurrentPlace.containsKey(courier)) {
+               
+                nextPackageForCourier.setString(1, gs170250_Constants.codeToPackageStatus.get(1));
+                
+                if(nextPackage.next()){
+                
+                    idPackage = nextPackage.getInt(1);
+                    price = nextPackage.getDouble(2);
+                    districtFrom = nextPackage.getInt(3);
+                    districtTo = nextPackage.getInt(4);
+                    income = nextPackage.getDouble(5);
+                    senderId = nextPackage.getInt(6);
+                
+                } else {
+                    return -1;
+                }
+                
+                updatePackages.setString(1, gs170250_Constants.codeToPackageStatus.get(2));
+                updatePackage.setString(2, gs170250_Constants.codeToPackageStatus.get(1));
+                updatePackage.setInt(3, courier);
+                
+                if(updatePackage.executeUpdate() < 1) {
+                    return -2;
+                }
+                
+                startDrive.setInt(1, courier);
+                startDrive.executeUpdate();
+                
+             } else {
+                
+                nextPackageForCourier.setString(1, gs170250_Constants.codeToPackageStatus.get(2));
+                if(nextPackage.next()){
+                
+                    idPackage = nextPackage.getInt(1);
+                    price = nextPackage.getDouble(2);
+                    districtFrom = nextPackage.getInt(3);
+                    districtTo = nextPackage.getInt(4);
+                    income = nextPackage.getDouble(5);
+                    senderId = nextPackage.getInt(6);
+                
+                } else {
+                    return -1;
+                }
+                distance += gs170250_Util.calculateEuclidDistance(courierCurrentPlace.get(courier), districtFrom);
+             }
+            
+            distance += gs170250_Util.calculateEuclidDistance(districtFrom, districtTo);
+            updatePackage.setString(1, gs170250_Constants.codeToPackageStatus.get(3));
+            updatePackage.setInt(2, idPackage);
+            
+            if(updatePackage.executeUpdate() < 1) {
+                return -2;
+            } 
+            
+            if(!courierCurrentPlace.containsKey(courier) && !courierCurrentProfit.containsKey(courier)) {
+                courierCurrentPlace.put(courier, districtTo);
+                courierCurrentProfit.put(courier, 0.0);
+            }
+            
+            courierCurrentPlace.replace(courier, districtTo);
+            getVehicle.setString(1, regNumber);
+            ResultSet vehicleDetails = getVehicle.executeQuery();
+            
+            if(!vehicleDetails.next()) {
+                return -2;
+            }
+            
+            String fuelType = vehicleDetails.getString(1);
+            double fuelConsumption = vehicleDetails.getDouble(2);
+                
+            courierCurrentProfit.replace(courier, courierCurrentProfit.get(courier) + 
+                    price * income / 100  - distance * fuelConsumption * gs170250_Constants.fuelTypeToPrice.get(fuelType));
+            
+            updateUser.setInt(1, senderId);
+            updateCourier.setInt(1, courier);
+            
+            updateUser.executeUpdate();
+            updateUser.executeUpdate();
+            
+            nextPackageForCourier.setInt(1, courier);
+            nextPackageForCourier.setString(2, gs170250_Constants.codeToPackageStatus.get(2));
+            nextPackage = nextPackageForCourier.executeQuery();
+            
+            if(!nextPackage.next()) {
+                
+                finishDrive.setString(1, "ne vozi");
+                finishDrive.setDouble(2, courierCurrentProfit.get(courier));
+                finishDrive.setInt(3, courier);
+                if(finishDrive.executeUpdate() < 1 ) {
+                    return -2;
+                }
+                courierCurrentProfit.remove(courier);
+                courierCurrentPlace.remove(courier);
+            }
+            
+            return idPackage;
+    }   catch (SQLException ex) {
+            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
+        return -2;
     }
-    
+
 }

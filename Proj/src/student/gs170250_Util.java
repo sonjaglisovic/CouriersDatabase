@@ -19,16 +19,45 @@ import java.util.logging.Logger;
  */
 public class gs170250_Util {
  
-    public static double calculatePrice(double districtFromX, double districtFromY,
-            double districtToX, double districtToY, int packageType, BigDecimal weight) {
-        
-        double euclidDistance = Math.sqrt((districtFromY - districtToY) * (districtFromY - districtToY) + 
+    public static double calculateEuclidDistance(int districtFrom, int districtTo) {
+        Connection connection = DB.getInstance().getConnection();
+        try(PreparedStatement getCoordinates = connection.prepareStatement("select xCoordinate, yCoordinate from "
+                + "District where IdDistrict = ?")) {
+            
+            getCoordinates.setInt(1, districtFrom);
+            ResultSet districtFromRS = getCoordinates.executeQuery();
+            if(!districtFromRS.next()) {
+                return gs170250_Constants.DATABASE_ERROR_CODE;
+            }
+            int districtFromX = districtFromRS.getInt(1);
+            int districtFromY = districtFromRS.getInt(2);
+            
+            getCoordinates.setInt(1, districtTo);
+            ResultSet districtToRS = getCoordinates.executeQuery();
+            if(!districtToRS.next()) {
+                return gs170250_Constants.DATABASE_ERROR_CODE;
+            }
+            int districtToX = districtToRS.getInt(1);
+            int districtToY = districtToRS.getInt(2);  
+            
+            return Math.sqrt((districtFromY - districtToY) * (districtFromY - districtToY) + 
                 (districtFromX - districtToX) * (districtFromX - districtToX));
-        if(packageType == 0) {
-            return euclidDistance * gs170250_Constants.price.get(packageType);
+        
+    }   catch (SQLException ex) {
+            Logger.getLogger(gs170250_Util.class.getName()).log(Level.SEVERE, null, ex);
         }
-        return euclidDistance * (gs170250_Constants.price.get(packageType) + gs170250_Constants.factor.get(packageType) * weight.doubleValue() * 
-                gs170250_Constants.priceByKg.get(packageType));
+        return 0.0;
+    }   
+    
+    public static BigDecimal calculatePrice(int districtFrom, int districtTo, int packageType, BigDecimal weight) {
+        
+        double euclidDistance = calculateEuclidDistance(districtFrom, districtTo);
+        
+        if(packageType == 0) {
+            return new BigDecimal(euclidDistance * gs170250_Constants.price.get(packageType));
+        }
+        return new BigDecimal (euclidDistance * (gs170250_Constants.price.get(packageType) + gs170250_Constants.factor.get(packageType) * weight.doubleValue() * 
+                gs170250_Constants.priceByKg.get(packageType)));
     }
     
 }
