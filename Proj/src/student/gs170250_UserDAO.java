@@ -122,24 +122,35 @@ public class gs170250_UserDAO implements UserOperations{
         Connection connection = DB.getInstance().getConnection();
         CourierOperations courierOperation = new gs170250_CourierDAO();
       
-      try(PreparedStatement getAdmin = connection.prepareStatement("select A.idUser from [Admin] A join [User] U on(A.idUser = U.idUser) "
+      try(PreparedStatement getCourier = connection.prepareStatement("select C.idUser from Courier C join [User] U on(C.idUser = U.idUser) "
               + "where UserName = ? ");
+              PreparedStatement checkSender = connection.prepareStatement("select * from  Package "
+              + "where idUser = (select idUser from [User] where UserName = ?) ");
+              PreparedStatement checkCourierRequest = connection.prepareStatement("select * from  CourierRequest "
+              + "where idUser = (select idUser from [User] where UserName = ?) ");
               PreparedStatement deleteUser = connection.prepareStatement("delete from  [User] "
-              + "where UserName = ? ");
-              PreparedStatement deleteAdmin = connection.prepareStatement("delete from  [Admin] "
-              + "where idUser = ? ")){
+              + "where UserName = ? ");){
+          
           for(String userName : names) {
-              
-            courierOperation.deleteCourier(userName);
-            getAdmin.setString(1, userName);
-            ResultSet adminByName = getAdmin.executeQuery();
-            
-            if(adminByName.next()) {
-                deleteAdmin.setInt(1, adminByName.getInt(1));
-                deleteAdmin.executeUpdate();
+           
+            getCourier.setString(1, userName);
+            ResultSet courier = getCourier.executeQuery();
+            if(courier.next()) {
+              continue;
             }
+            
+            checkSender.setString(1, userName);
+            checkCourierRequest.setString(1, userName);
+            ResultSet courierRequests = checkCourierRequest.executeQuery();
+            if(courierRequests.next()) {
+                continue;
+            }
+            ResultSet sentPackages = checkSender.executeQuery();
+            if(sentPackages.next()) {
+                continue;
+            }                 
             deleteUser.setString(1, userName);
-            numOfDeletedUsers += deleteUser.executeUpdate();
+            numOfDeletedUsers += (deleteUser.executeUpdate() > 0 ? 1 : 0);
           }
           return numOfDeletedUsers;
       } catch (SQLException ex) {

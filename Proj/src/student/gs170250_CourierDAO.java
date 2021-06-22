@@ -30,6 +30,8 @@ public class gs170250_CourierDAO implements CourierOperations {
          Connection connection = DB.getInstance().getConnection();
          try (PreparedStatement getUserId = connection.prepareStatement("select idUser from [User] where UserName = ? ");
                  PreparedStatement checkUser = connection.prepareStatement("select * from Courier where idUser = ? ");
+                  PreparedStatement checkVehicle = connection.prepareStatement("select * from Courier where RegNumber = ? ");
+                 PreparedStatement checkIfVehicleExists = connection.prepareStatement("select * from Vehicle where RegNumber = ? ");
                  PreparedStatement insertCourierStatement = connection.prepareStatement("insert into Courier (idUser, RegNumber) "
                     + "values(?, ?)") ) {
              
@@ -42,6 +44,15 @@ public class gs170250_CourierDAO implements CourierOperations {
             int userId = userIdResult.getInt(1);
             checkUser.setInt(1, userId);
             if(checkUser.executeQuery().next()) {
+                return false;
+            }
+            checkVehicle.setString(1, licencePlateNumber);
+            if(checkVehicle.executeQuery().next()) {
+                return false;
+            }
+            
+            checkIfVehicleExists.setString(1, licencePlateNumber);
+            if(!checkIfVehicleExists.executeQuery().next()) {
                 return false;
             }
             
@@ -59,9 +70,15 @@ public class gs170250_CourierDAO implements CourierOperations {
     public boolean deleteCourier(String courierUserName) {
        
          Connection connection = DB.getInstance().getConnection();
-         try (PreparedStatement deleteCourierStatement = connection.prepareStatement("delete from Courier "
+         try (PreparedStatement checkPackages = connection.prepareStatement("select * from  Package where Courier = (select idUser from [User] where UserName = ?) ");
+                 PreparedStatement deleteCourierStatement = connection.prepareStatement("delete from Courier "
                     + "where idUser = (select idUser from [User] where UserName = ?) ")) {
             
+            checkPackages.setString(1, courierUserName);
+            ResultSet couriersPackages = checkPackages.executeQuery();
+            if(couriersPackages.next()) {
+                return false;
+            }
             deleteCourierStatement.setString(1, courierUserName);
             return deleteCourierStatement.executeUpdate() > 0 ? true : false;
         } catch (SQLException ex) {
@@ -80,7 +97,7 @@ public class gs170250_CourierDAO implements CourierOperations {
        Connection connection = DB.getInstance().getConnection();
          try (PreparedStatement findCouriersByStatus = connection.prepareStatement("select * from Courier C join [User] U "
                  + "on(C.idUser = U.idUser)"
-                    + "where C.Status = ? ")) {
+                    + "where C.Status = ? order by Profit desc")) {
             
             findCouriersByStatus.setString(1, gs170250_Constants.codeToStatus.get(Integer.valueOf(status)));
             ResultSet allCouriers = findCouriersByStatus.executeQuery();
@@ -119,7 +136,7 @@ public class gs170250_CourierDAO implements CourierOperations {
         
         Connection connection = DB.getInstance().getConnection();
         try (PreparedStatement getAverageProfitStatement = connection.prepareStatement("select coalesce(avg(Profit), 0) from Courier"
-                + " where NumOfDeliveredPackages > ? "
+                + " where NumOfDeliveredPackages >= ? "
         )){
 
             getAverageProfitStatement.setInt(1, numOfDelivered);

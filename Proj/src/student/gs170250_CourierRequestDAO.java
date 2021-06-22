@@ -30,6 +30,7 @@ public class gs170250_CourierRequestDAO implements CourierRequestOperation {
          try (PreparedStatement getUserId = connection.prepareStatement("select idUser from [User] where UserName = ? ");
                  PreparedStatement checkUser = connection.prepareStatement("select * from CourierRequest where idUser = ?");
                  PreparedStatement checkIfCourier = connection.prepareStatement("select * from Courier where idUser = ?");
+                 PreparedStatement checkVehicleNotFree = connection.prepareStatement("select * from Courier where RegNumber = ?");
                  PreparedStatement checkVehicle = connection.prepareStatement("select * from Vehicle where RegNumber = ?");
                  PreparedStatement insertCourierRequestStatement = connection.prepareStatement("insert into CourierRequest (idUser, RegNumber) "
                     + "values(?, ?)") ) {
@@ -52,6 +53,12 @@ public class gs170250_CourierRequestDAO implements CourierRequestOperation {
             checkVehicle.setString(1, regNumber);
             
             if(!checkVehicle.executeQuery().next()) {
+                return false;
+            }
+            
+            checkVehicleNotFree.setString(1, regNumber);
+            ResultSet bookedVehicle = checkVehicleNotFree.executeQuery();
+            if(bookedVehicle.next()) {
                 return false;
             }
             
@@ -87,9 +94,22 @@ public class gs170250_CourierRequestDAO implements CourierRequestOperation {
     public boolean changeVehicleInCourierRequest(String userName, String regNumber) {
         
         Connection connection = DB.getInstance().getConnection();
-        try (PreparedStatement updateRegNumber = connection.prepareStatement("update CourierRequest set RegNumber = ? where "
+        try ( PreparedStatement checkVehicleNotFree = connection.prepareStatement("select * from Courier where RegNumber = ?"); 
+                PreparedStatement checkVehicle = connection.prepareStatement("select * from Vehicle where RegNumber = ?");
+                PreparedStatement updateRegNumber = connection.prepareStatement("update CourierRequest set RegNumber = ? where "
                 + "idUser = (select idUser from [User] where UserName = ? ) ")){
            
+            checkVehicle.setString(1, regNumber);
+            ResultSet vehicle = checkVehicle.executeQuery();
+            if(!vehicle.next()) {
+                return false;
+            } 
+            
+            checkVehicleNotFree.setString(1, regNumber);
+            ResultSet bookedVehicle = checkVehicleNotFree.executeQuery();
+            if(bookedVehicle.next()) {
+                return false;
+            } 
             updateRegNumber.setString(1, regNumber);
             updateRegNumber.setString(2, userName);
             

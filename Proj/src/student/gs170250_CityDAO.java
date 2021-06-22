@@ -79,7 +79,7 @@ public class gs170250_CityDAO implements CityOperations {
             ResultSet citiesByName = checkName.executeQuery();
             ResultSet districtsByCity = checkDistricts.executeQuery();
             
-            if(citiesByName.next() && !citiesByName.next()) {
+            if(citiesByName.next() && !districtsByCity.next()) {
                 
                 deleteCityStatement.setString(1, name);
 
@@ -101,10 +101,16 @@ public class gs170250_CityDAO implements CityOperations {
     public boolean deleteCity(int idCity) {
         
        Connection connection = DB.getInstance().getConnection(); 
-       try (PreparedStatement checkId = connection.prepareStatement("select * from City where Name = ?");
+       try (PreparedStatement checkDistricts = connection.prepareStatement("select * from District where idCity = ?");
+               PreparedStatement checkId = connection.prepareStatement("select * from City where Name = ?");
                PreparedStatement deleteCityStatement = connection.prepareStatement("delete from City "
                     + "where idCity = ? ")) {
            
+           checkDistricts.setInt(1, idCity);
+           ResultSet districtsInCity = checkDistricts.executeQuery();
+           if(districtsInCity.next()) {
+               return false;
+           }
             deleteCityStatement.setInt(1, idCity);
             checkId.setInt(1, idCity);
   

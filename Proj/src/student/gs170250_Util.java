@@ -53,6 +53,10 @@ public class gs170250_Util {
         
         double euclidDistance = calculateEuclidDistance(districtFrom, districtTo);
         
+        if(euclidDistance == gs170250_Constants.DATABASE_ERROR_CODE) {
+            return new BigDecimal(gs170250_Constants.DATABASE_ERROR_CODE);
+        }
+        
         if(packageType == 0) {
             return new BigDecimal(euclidDistance * gs170250_Constants.price.get(packageType));
         }

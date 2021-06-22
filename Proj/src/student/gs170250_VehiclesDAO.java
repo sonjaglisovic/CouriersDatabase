@@ -55,12 +55,24 @@ public class gs170250_VehiclesDAO implements VehicleOperations{
         
         int numOfVehiclesDeleted = 0;
         Connection connection = DB.getInstance().getConnection();
-        try(PreparedStatement deleteVehicleByRegNumber = connection.prepareStatement("delete from Vehicle where RegNumber = ? ");
+        try(PreparedStatement checkCourier = connection.prepareStatement("select * from Courier where RegNumber = ? ");
+                PreparedStatement checkCourierRequest = connection.prepareStatement("select * from CourierRequest where RegNumber = ? ");
+                PreparedStatement deleteVehicleByRegNumber = connection.prepareStatement("delete from Vehicle where RegNumber = ? ");
               ) {
             
-            for(String name : regNumbers) {
-                
-              deleteVehicleByRegNumber.setString(1, name);
+            for(String regNumber : regNumbers) {
+              
+              checkCourier.setString(1, regNumber);
+              ResultSet couriersWithVehicle = checkCourier.executeQuery();
+              if(couriersWithVehicle.next()) {
+                  continue;
+              }
+              checkCourierRequest.setString(1, regNumber);
+              ResultSet courierRequestsForVehicle = checkCourierRequest.executeQuery();
+              if(courierRequestsForVehicle.next()) {
+                  continue;
+              }
+              deleteVehicleByRegNumber.setString(1, regNumber);
               numOfVehiclesDeleted += deleteVehicleByRegNumber.executeUpdate();
             }
             return numOfVehiclesDeleted;

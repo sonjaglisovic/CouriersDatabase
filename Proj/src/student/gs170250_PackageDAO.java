@@ -30,10 +30,7 @@ import rs.etf.sab.operations.PackageOperations;
 
 
 
-public class gs1702500_PackageDAO implements PackageOperations {
-
-    Map<Integer, Integer> courierCurrentPlace = new HashMap<>();
-    Map<Integer, Double> courierCurrentProfit = new HashMap<>();
+public class gs170250_PackageDAO implements PackageOperations {
     
     private class gs170250d_Pair implements PackageOperations.Pair<Integer, BigDecimal> {
 
@@ -81,8 +78,12 @@ public class gs1702500_PackageDAO implements PackageOperations {
             insertPackage.setBigDecimal(3, weight);
             insertPackage.setInt(4, districtFrom);
             insertPackage.setInt(5, districtTo);
-            insertPackage.setBigDecimal(6, gs170250_Util.calculatePrice(districtFrom, districtTo, packageType, weight));
-            
+            BigDecimal calculatedPrice = gs170250_Util.calculatePrice(districtFrom, districtTo, packageType, weight);
+            if(calculatedPrice.intValue() != -1) {
+                insertPackage.setBigDecimal(6, gs170250_Util.calculatePrice(districtFrom, districtTo, packageType, weight));
+            } else {
+                return gs170250_Constants.DATABASE_ERROR_CODE;
+            }
             insertPackage.executeUpdate();
             ResultSet insertedKeys = insertPackage.getGeneratedKeys();
             if(insertedKeys.next()) {
@@ -90,7 +91,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             }
             
         } catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return gs170250_Constants.DATABASE_ERROR_CODE;
     }
@@ -101,10 +102,10 @@ public class gs1702500_PackageDAO implements PackageOperations {
          Connection connection = DB.getInstance().getConnection();
          try (PreparedStatement checkCourier = connection.prepareStatement("select idUser from Courier where idUser = (select "
                  + "idUser from [User] where UserName = ?) and Status = 'ne vozi'");
-                 PreparedStatement checkPackage = connection.prepareStatement("select * from Package where idPackage = ?");
+                 PreparedStatement checkPackage = connection.prepareStatement("select * from Package where idPackage = ? and Status = ?");
                  PreparedStatement insertTransportOffer = connection.prepareStatement("insert into TransportOffer (idUser, idPackage, OfferDetails) "
                     + "values(?, ?, ?)", PreparedStatement.RETURN_GENERATED_KEYS);
-                 PreparedStatement checkOffer = connection.prepareStatement("select * from TransportOffer  where idUser = ? ");
+                 PreparedStatement checkOffer = connection.prepareStatement("select * from TransportOffer  where idUser = ? and idPackage = ?");
                  ) {
              
             checkCourier.setString(1, userName);
@@ -113,11 +114,13 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             } 
             checkPackage.setInt(1, packageId);
+            checkPackage.setString(2, "kreiran");
             if(!checkPackage.executeQuery().next()) {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             }
           
             checkOffer.setInt(1, courierId.getInt(1));
+            checkOffer.setInt(2, packageId);
             if(checkOffer.executeQuery().next()) {
                 return gs170250_Constants.DATABASE_ERROR_CODE;
             }
@@ -132,7 +135,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 return insertedKeys.getInt(1);
             }
         } catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return gs170250_Constants.DATABASE_ERROR_CODE;
     }
@@ -172,7 +175,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
            
             return updatePackage.executeUpdate() > 0 ? true : false;
         } catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
     }
@@ -191,7 +194,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             }
             return allOffers;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -211,7 +214,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             } 
             return offersForPackages;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
        
@@ -221,12 +224,8 @@ public class gs1702500_PackageDAO implements PackageOperations {
     public boolean deletePackage(int packageId) {
         
       Connection connection = DB.getInstance().getConnection();
-         try ( PreparedStatement deleteOffers = connection.prepareStatement("delete from TransportOffer where idPackage = ?");
-                 PreparedStatement deletePackageStatement = connection.prepareStatement("delete from Package "
-                    + "where IdDistrict = ? ")) {
-            
-            deleteOffers.setInt(1, packageId);
-            deleteOffers.executeUpdate();
+         try (PreparedStatement deletePackageStatement = connection.prepareStatement("delete from Package "
+                    + "where idPackage = ? ")) {
             
             deletePackageStatement.setInt(1, packageId);
             
@@ -262,7 +261,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
                  
             return updatePackage.executeUpdate() > 0 ? true : false;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
     }
@@ -294,7 +293,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             return updatePackage.executeUpdate() > 0 ? true : false;
             
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
     }
@@ -316,7 +315,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             } 
             return deliveryStatus;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -334,7 +333,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
               return price.getBigDecimal(1);
             } 
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -352,7 +351,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
               return Date.valueOf(accepted.getTimestamp(1).toLocalDateTime().toLocalDate());
             } 
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -375,7 +374,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             } 
             return allPackages;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -394,7 +393,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             }
             return allPackages;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -422,7 +421,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
             } 
             return allPackages;
         }catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
     }
@@ -434,7 +433,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
         int idPackage;
         
         Connection connection = DB.getInstance().getConnection();
-        try(PreparedStatement checkCourier = connection.prepareStatement("select idUser, RegNumber from Courier  where idUser (select idUser from [User]  UserName = ?) ");
+        try(PreparedStatement checkCourier = connection.prepareStatement("select idUser, RegNumber, Status, CurrentDriveProfit, CouriersCurrentPlace from Courier  where idUser = (select idUser from [User] where UserName = ?) ");
                 PreparedStatement nextPackageForCourier = connection.prepareStatement("select TOP 1 idPackage, Price, DistrictFrom, DistrictTo, CouriersIncome, idUser Status from Package where "
                 + "Courier = ? and Status = ? order by Accepted");
                 PreparedStatement updatePackages = connection.prepareStatement("update Package set "
@@ -450,7 +449,10 @@ public class gs1702500_PackageDAO implements PackageOperations {
                         + "NumOfSentPackages = NumOfSentPackages + 1 where idUser = ?");
                 PreparedStatement updateCourier = connection.prepareStatement("update Courier set "
                         + "NumOfDeliveredPackages = NumOfDeliveredPackages + 1 where idUser = ?");
-                ) {
+                PreparedStatement updateCpuriersCurrentParameters = connection.prepareStatement("update Courier set "
+                        + "CurrentDriveProfit = ?, CouriersCurrentPlace = ? where idUser = ?");
+                PreparedStatement setCourierParametersToNull = connection.prepareStatement("update Courier set "
+                        + "CurrentDriveProfit = NULL, CouriersCurrentPlace = NULL where idUser = ?");) {
               
             checkCourier.setString(1, userName);
             ResultSet courierId = checkCourier.executeQuery();
@@ -460,20 +462,24 @@ public class gs1702500_PackageDAO implements PackageOperations {
             
             int courier = courierId.getInt(1);
             String regNumber = courierId.getString(2);
+            String courierStatus = courierId.getString(3);
+            double cuurentProfit = courierId.getDouble(4);
+            int currentPlace = courierId.getInt(5);
             
             nextPackageForCourier.setInt(1, courier);
-            
             double distance = 0.0;
-            ResultSet nextPackage = nextPackageForCourier.executeQuery();
+
+            ResultSet nextPackage;
             int districtFrom;
             int districtTo;
             double price;
             double income;
             int senderId;
             
-            if(!courierCurrentPlace.containsKey(courier)) {
+            if(courierStatus.equals("ne vozi")) {
                
-                nextPackageForCourier.setString(1, gs170250_Constants.codeToPackageStatus.get(1));
+                nextPackageForCourier.setString(2, gs170250_Constants.codeToPackageStatus.get(1));
+                nextPackage = nextPackageForCourier.executeQuery();
                 
                 if(nextPackage.next()){
                 
@@ -489,10 +495,10 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 }
                 
                 updatePackages.setString(1, gs170250_Constants.codeToPackageStatus.get(2));
-                updatePackage.setString(2, gs170250_Constants.codeToPackageStatus.get(1));
-                updatePackage.setInt(3, courier);
+                updatePackages.setString(2, gs170250_Constants.codeToPackageStatus.get(1));
+                updatePackages.setInt(3, courier);
                 
-                if(updatePackage.executeUpdate() < 1) {
+                if(updatePackages.executeUpdate() < 1) {
                     return -2;
                 }
                 
@@ -501,7 +507,9 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 
              } else {
                 
-                nextPackageForCourier.setString(1, gs170250_Constants.codeToPackageStatus.get(2));
+                nextPackageForCourier.setString(2, gs170250_Constants.codeToPackageStatus.get(2));
+                nextPackage = nextPackageForCourier.executeQuery();
+                
                 if(nextPackage.next()){
                 
                     idPackage = nextPackage.getInt(1);
@@ -514,7 +522,7 @@ public class gs1702500_PackageDAO implements PackageOperations {
                 } else {
                     return -1;
                 }
-                distance += gs170250_Util.calculateEuclidDistance(courierCurrentPlace.get(courier), districtFrom);
+                distance += gs170250_Util.calculateEuclidDistance(currentPlace, districtFrom);
              }
             
             distance += gs170250_Util.calculateEuclidDistance(districtFrom, districtTo);
@@ -524,13 +532,6 @@ public class gs1702500_PackageDAO implements PackageOperations {
             if(updatePackage.executeUpdate() < 1) {
                 return -2;
             } 
-            
-            if(!courierCurrentPlace.containsKey(courier) && !courierCurrentProfit.containsKey(courier)) {
-                courierCurrentPlace.put(courier, districtTo);
-                courierCurrentProfit.put(courier, 0.0);
-            }
-            
-            courierCurrentPlace.replace(courier, districtTo);
             getVehicle.setString(1, regNumber);
             ResultSet vehicleDetails = getVehicle.executeQuery();
             
@@ -540,15 +541,21 @@ public class gs1702500_PackageDAO implements PackageOperations {
             
             String fuelType = vehicleDetails.getString(1);
             double fuelConsumption = vehicleDetails.getDouble(2);
-                
-            courierCurrentProfit.replace(courier, courierCurrentProfit.get(courier) + 
-                    price * income / 100  - distance * fuelConsumption * gs170250_Constants.fuelTypeToPrice.get(fuelType));
+            
+            double profit = cuurentProfit + 
+                    price * (1 + income / 100)  - distance * fuelConsumption * gs170250_Constants.fuelTypeToPrice.get(fuelType);
+            updateCpuriersCurrentParameters.setDouble(1, profit);
+            
+            updateCpuriersCurrentParameters.setDouble(2, districtTo);
+            updateCpuriersCurrentParameters.setInt(3, courier);
+            
+            updateCpuriersCurrentParameters.executeUpdate();
             
             updateUser.setInt(1, senderId);
             updateCourier.setInt(1, courier);
             
             updateUser.executeUpdate();
-            updateUser.executeUpdate();
+            updateCourier.executeUpdate();
             
             nextPackageForCourier.setInt(1, courier);
             nextPackageForCourier.setString(2, gs170250_Constants.codeToPackageStatus.get(2));
@@ -557,18 +564,18 @@ public class gs1702500_PackageDAO implements PackageOperations {
             if(!nextPackage.next()) {
                 
                 finishDrive.setString(1, "ne vozi");
-                finishDrive.setDouble(2, courierCurrentProfit.get(courier));
+                finishDrive.setDouble(2, profit);
                 finishDrive.setInt(3, courier);
                 if(finishDrive.executeUpdate() < 1 ) {
                     return -2;
                 }
-                courierCurrentProfit.remove(courier);
-                courierCurrentPlace.remove(courier);
+                setCourierParametersToNull.setInt(1, courier);
+                setCourierParametersToNull.executeUpdate();
             }
             
             return idPackage;
     }   catch (SQLException ex) {
-            Logger.getLogger(gs1702500_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(gs170250_PackageDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
         
         return -2;

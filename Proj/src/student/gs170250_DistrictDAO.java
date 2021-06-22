@@ -72,21 +72,27 @@ public class gs170250_DistrictDAO implements DistrictOperations {
         try(PreparedStatement deleteDistrictByName = connection.prepareStatement("delete from District where Name = ?");
               ) {
             for(String name : names) {
-              PreparedStatement checkName = connection.prepareStatement("select * from District where Name = ?");
+          
+              PreparedStatement checkPackage = connection.prepareStatement("select * from Package where DistrictFrom = (select IdDistrict from District where Name = ?) "
+                      + "or DistrictTo = (select IdDistrict from District where Name = ?)");
               
+              checkPackage.setString(1, name);
+              checkPackage.setString(2, name);
+              ResultSet packagesWithDistrict = checkPackage.executeQuery();
+              if(packagesWithDistrict.next()) {
+                  packagesWithDistrict.close();
+                  continue;
+              }
               deleteDistrictByName.setString(1, name);
               
-              checkName.setString(1, name);
-              ResultSet districtsByName = checkName.executeQuery();
-              
-              if(districtsByName.next()) {
-                int codeSuccess = deleteDistrictByName.executeUpdate();
+        
+            int codeSuccess = deleteDistrictByName.executeUpdate();
 
-                if(codeSuccess > 0) {
-                    numOfDistrictsDeleted++;
-                }    
-              }
+            if(codeSuccess > 0) {
+                numOfDistrictsDeleted++;
             }
+            checkPackage.close();
+          }
         } catch (SQLException ex) {
             Logger.getLogger(gs170250_DistrictDAO.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -99,8 +105,18 @@ public class gs170250_DistrictDAO implements DistrictOperations {
         
         Connection connection = DB.getInstance().getConnection();
          try ( PreparedStatement checkId = connection.prepareStatement("select * from District where IdDistrict = ?");
+                  PreparedStatement checkPackages = connection.prepareStatement("select * from Package where DistrictFrom = ? "
+                      + "or DistrictTo = ?");
                  PreparedStatement deleteDistrictStatement = connection.prepareStatement("delete from District "
                     + "where IdDistrict = ? ")) {
+            
+            checkPackages.setInt(1, idDistrict);
+            checkPackages.setInt(2, idDistrict);
+            ResultSet districtsInPackages = checkPackages.executeQuery();
+            
+            if(districtsInPackages.next()) {
+                return false;
+            }
             
             deleteDistrictStatement.setInt(1, idDistrict);
             
@@ -122,12 +138,30 @@ public class gs170250_DistrictDAO implements DistrictOperations {
     public int deleteAllDistrictsFromCity(String cityName) {
         
         Connection connection = DB.getInstance().getConnection();
-        try (PreparedStatement deleteDistrictStatement = connection.prepareStatement(" delete from District where idCity = (select idCity from City "
-                + "where Name = ?)");) {
+        try ( PreparedStatement checkPackages = connection.prepareStatement("select * from Package where DistrictFrom = ? "
+                      + "or DistrictTo = ?");
+                PreparedStatement getAllDistrictsFromCity = connection.prepareStatement("select IdDistrict from District where idCity = (select idCity from City where Name = ?)");
+                PreparedStatement deleteDistrictStatement = connection.prepareStatement(" delete from District where IdDistrict = ? "
+             );) {
            
-           deleteDistrictStatement.setString(1, cityName);
+           getAllDistrictsFromCity.setString(1, cityName);
+           ResultSet districtsFromCity = getAllDistrictsFromCity.executeQuery();
+           int numOfDeleted = 0;
+           while(districtsFromCity.next()) {
+               
+               int idDistrict = districtsFromCity.getInt(1);
+               checkPackages.setInt(1, idDistrict);
+               checkPackages.setInt(2, idDistrict);
+               ResultSet packagesForDistrict = checkPackages.executeQuery();
+               if(packagesForDistrict.next()) {
+                   continue;
+               }
+               deleteDistrictStatement.setInt(1, idDistrict);
+               numOfDeleted += deleteDistrictStatement.executeUpdate();
+           }
+           
 
-           return deleteDistrictStatement.executeUpdate();
+           return numOfDeleted;
        } catch (SQLException ex) {
            Logger.getLogger(gs170250_DistrictDAO.class.getName()).log(Level.SEVERE, null, ex);
        }

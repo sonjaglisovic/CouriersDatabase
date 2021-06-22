@@ -20,20 +20,29 @@ public class gs170250_GeneralDAO implements GeneralOperations {
 
     @Override
     public void eraseAll() {
+        
         Connection connection = DB.getInstance().getConnection();
         try(PreparedStatement eraseAllCities = connection.prepareStatement("delete from City where idCity is not null");
                 PreparedStatement eraseAllDistricts = connection.prepareStatement("delete from District where idCity is not null");
                 PreparedStatement eraseAllAdmins = connection.prepareStatement("delete from [Admin] where idUser is not null");
                 PreparedStatement eraseAllCouriers = connection.prepareStatement("delete from Courier where idUser is not null");
                 PreparedStatement eraseAllUsers = connection.prepareStatement("delete from [User] where idUser is not null");
-                PreparedStatement eraseAllVehicles = connection.prepareStatement("delete from Vehicle where regNumber is not null");) {
+                PreparedStatement eraseAllVehicles = connection.prepareStatement("delete from Vehicle where regNumber is not null");
+                PreparedStatement eraseAllCourierRequests = connection.prepareStatement("delete from CourierRequest where idUser is not null");
+                PreparedStatement eraseAllPackages = connection.prepareStatement("delete from Package where idPackage is not null");
+                ) {
             
+            eraseAllPackages.executeUpdate();
+            eraseAllCourierRequests.executeUpdate();
             eraseAllAdmins.executeUpdate();
             eraseAllCouriers.executeUpdate();
             eraseAllUsers.executeUpdate();
             eraseAllDistricts.executeUpdate();
             eraseAllCities.executeUpdate();
             eraseAllVehicles.executeUpdate();
+            
+            
+            
         
     }   catch (SQLException ex) {
             Logger.getLogger(gs170250_GeneralDAO.class.getName()).log(Level.SEVERE, null, ex);
